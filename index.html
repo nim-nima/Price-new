@@ -1,0 +1,174 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اپ انبارداری شخصی</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; padding: 20px; background: #f8f8f8; }
+        h2 { color: #2c3e50; }
+        input, button, select {
+            padding: 10px; margin: 5px 0; width: 100%;
+            border: 1px solid #ccc; border-radius: 5px;
+            font-size: 1em;
+        }
+        button { background: #3498db; color: white; cursor: pointer; }
+        button:hover { background: #2980b9; }
+        .section { margin-top: 30px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+        .low-stock { color: red; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        th { background: #eee; }
+    </style>
+</head>
+<body>
+
+<h2>اپلیکیشن انبارداری شخصی</h2>
+
+<div class="section">
+    <h3>ثبت / ویرایش کالا</h3>
+    <input id="code" placeholder="کد کالا">
+    <input id="retail" placeholder="قیمت خورده (تومان)" type="number">
+    <input id="wholesale" placeholder="قیمت کیسه‌ای (تومان)" type="number">
+    <input id="stock" placeholder="موجودی (کیسه)" type="number">
+    <button onclick="saveItem()">ذخیره کالا</button>
+</div>
+
+<div class="section">
+    <h3>ورود / خروج موجودی</h3>
+    <input id="moveCode" placeholder="کد کالا">
+    <select id="moveType">
+        <option value="in">ورود</option>
+        <option value="out">خروج</option>
+    </select>
+    <input id="moveAmount" placeholder="تعداد کیسه" type="number">
+    <button onclick="moveStock()">ثبت ورود/خروج</button>
+</div>
+
+<div class="section">
+    <h3>جستجو</h3>
+    <input id="searchCode" placeholder="کد کالا را وارد کنید" oninput="searchItem()">
+    <div id="searchResult"></div>
+</div>
+
+<div class="section">
+    <h3>گزارش کلی انبار</h3>
+    <button onclick="generateReport()">نمایش گزارش</button>
+    <button onclick="downloadPDF()">دانلود PDF</button>
+    <div id="report"></div>
+</div>
+
+<div class="section">
+    <h3>پشتیبان‌گیری / بازیابی</h3>
+    <button onclick="backupData()">دریافت فایل پشتیبان</button>
+    <input type="file" onchange="restoreData(event)">
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+    const getToday = () => {
+        const d = new Date();
+        const ye = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric' }).format(d);
+        const mo = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: '2-digit' }).format(d);
+        const da = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: '2-digit' }).format(d);
+        return `${ye}/${mo}/${da}`;
+    };
+
+    function saveItem() {
+        const code = document.getElementById('code').value.trim();
+        const retail = document.getElementById('retail').value;
+        const wholesale = document.getElementById('wholesale').value;
+        const stock = parseInt(document.getElementById('stock').value);
+        const date = getToday();
+
+        if (!code) return alert("کد کالا را وارد کنید.");
+
+        const data = JSON.parse(localStorage.getItem('items') || '{}');
+        data[code] = { retail, wholesale, stock, date };
+        localStorage.setItem('items', JSON.stringify(data));
+
+        alert("اطلاعات ذخیره شد.");
+    }
+
+    function moveStock() {
+        const code = document.getElementById('moveCode').value.trim();
+        const type = document.getElementById('moveType').value;
+        const amount = parseInt(document.getElementById('moveAmount').value);
+        const data = JSON.parse(localStorage.getItem('items') || '{}');
+        const item = data[code];
+        if (!item) return alert("کالا یافت نشد.");
+
+        item.stock = type === 'in' ? item.stock + amount : item.stock - amount;
+        item.date = getToday();
+        localStorage.setItem('items', JSON.stringify(data));
+        alert("موجودی بروزرسانی شد.");
+    }
+
+    function searchItem() {
+        const code = document.getElementById('searchCode').value.trim();
+        const data = JSON.parse(localStorage.getItem('items') || '{}');
+        const item = data[code];
+        const res = document.getElementById('searchResult');
+        if (!item) return res.innerHTML = "کالا یافت نشد.";
+
+        res.innerHTML = `
+            <strong>کد:</strong> ${code}<br>
+            <strong>قیمت خورده:</strong> ${item.retail} تومان<br>
+            <strong>قیمت کیسه‌ای:</strong> ${item.wholesale} تومان<br>
+            <strong>موجودی:</strong> <span class="${item.stock <= 0 ? 'low-stock' : ''}">${item.stock} کیسه</span><br>
+            <strong>تاریخ:</strong> ${item.date}
+        `;
+    }
+
+    function generateReport() {
+        const data = JSON.parse(localStorage.getItem('items') || '{}');
+        let html = "<table><tr><th>کد</th><th>خورده</th><th>کیسه‌ای</th><th>موجودی</th><th>تاریخ</th></tr>";
+        for (let code in data) {
+            const item = data[code];
+            html += `<tr>
+                <td>${code}</td>
+                <td>${item.retail}</td>
+                <td>${item.wholesale}</td>
+                <td class="${item.stock <= 0 ? 'low-stock' : ''}">${item.stock}</td>
+                <td>${item.date}</td>
+            </tr>`;
+        }
+        html += "</table>";
+        document.getElementById("report").innerHTML = html;
+    }
+
+    function downloadPDF() {
+        generateReport();
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.html(document.getElementById("report"), {
+            callback: function (doc) {
+                doc.save("گزارش_انبار.pdf");
+            },
+            x: 10, y: 10
+        });
+    }
+
+    function backupData() {
+        const data = localStorage.getItem('items') || '{}';
+        const blob = new Blob([data], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "backup.json";
+        link.click();
+    }
+
+    function restoreData(event) {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            localStorage.setItem('items', e.target.result);
+            alert("اطلاعات بازیابی شد.");
+        }
+        reader.readAsText(file);
+    }
+</script>
+
+</body>
+</html>
